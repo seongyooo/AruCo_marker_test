@@ -33,11 +33,15 @@ class MainActivity : AppCompatActivity() {
 
     // 서버에서 받은 marker 및 grid 정보
     private var myMarkerId = -1
-    private var gridRows = 0 // 초기값을 0으로 변경
-    private var gridCols = 0 // 초기값을 0으로 변경
-    private var myRow = -1
-    private var myCol = -1
+//    private var gridRows = 0 // 초기값을 0으로 변경
+//    private var gridCols = 0 // 초기값을 0으로 변경
+//    private var myRow = -1
+//    private var myCol = -1
     private var myRotation = 0
+    private var rel_x = 0f
+    private var rel_y = 0f
+    private var rel_w = 0f
+    private var rel_h = 0f
 
     // --- 레이스 컨디션 해결을 위한 변수 ---
     private var isSurfaceReady = false
@@ -125,17 +129,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setGridLayoutInfo(json: JSONObject) {
-        val gridInfo = json.getJSONObject("grid_info")
-        gridRows = gridInfo.getInt("rows")
-        gridCols = gridInfo.getInt("cols")
+        // 이제 grid_info는 없으므로 바로 layout 배열에 접근
         val layoutArray = json.getJSONArray("layout")
         for (i in 0 until layoutArray.length()) {
             val marker = layoutArray.getJSONObject(i)
             if (marker.getInt("id") == myMarkerId) {
-                val gridPos = marker.getJSONObject("grid_pos")
-                myRow = gridPos.getInt("row")
-                myCol = gridPos.getInt("col")
                 myRotation = marker.getInt("rotation")
+                val relRect = marker.getJSONObject("relative_rect")
+                rel_x = relRect.getDouble("x_percent").toFloat()
+                rel_y = relRect.getDouble("y_percent").toFloat()
+                rel_w = relRect.getDouble("w_percent").toFloat()
+                rel_h = relRect.getDouble("h_percent").toFloat()
+                Log.d("LayoutInfo", "My relative rect: x=$rel_x, y=$rel_y, w=$rel_w, h=$rel_h")
                 break
             }
         }
@@ -197,29 +202,43 @@ class MainActivity : AppCompatActivity() {
         cropJob = lifecycleScope.launch(Dispatchers.Default) {
             while (isActive) {
                 val srcBitmap = binding.hiddenTextureView.bitmap
-                if (srcBitmap == null || gridCols == 0 || gridRows == 0) {
+                if (srcBitmap == null) {
                     delay(20)
                     continue
                 }
 
-                val tileW = srcBitmap.width / gridCols
-                val tileH = srcBitmap.height / gridRows
-                val left = myCol * tileW
-                val top = myRow * tileH
+                // rel_w가 0이면 아직 레이아웃 정보가 없는 것
+                if (rel_w > 0f) {
+                    // 상대 좌표(비율)를 실제 픽셀 좌표로 변환
+                    val srcW = srcBitmap.width
+                    val srcH = srcBitmap.height
 
-                try {
-                    val myTile = Bitmap.createBitmap(srcBitmap, left, top, tileW, tileH)
-                    val rotated = rotateBitmap(myTile, myRotation)
+                    // 내가 잘라야 할 부분의 정확한 픽셀 위치와 크기 계산
+                    val left = (rel_x * srcW).toInt()
+                    val top = (rel_y * srcH).toInt()
+                    val tileW = (rel_w * srcW).toInt()
+                    val tileH = (rel_h * srcH).toInt()
 
-                    withContext(Dispatchers.Main) {
-                        binding.tileImageView.setImageBitmap(rotated)
+                    // 비트맵 경계를 벗어나지 않도록 안전장치 추가
+                    if (left + tileW > srcW || top + tileH > srcH || tileW <= 0 || tileH <= 0) {
+                        Log.w("CropWarning", "Calculated crop area is out of bounds. Skipping frame.")
+                        delay(16)
+                        continue
                     }
 
-                    if (rotated != myTile) {
-                        myTile.recycle()
+                    try {
+                        val myTile = Bitmap.createBitmap(srcBitmap, left, top, tileW, tileH)
+                        val rotated = rotateBitmap(myTile, myRotation)
+
+                        withContext(Dispatchers.Main) {
+                            binding.tileImageView.setImageBitmap(rotated)
+                        }
+                        if (rotated != myTile) {
+                            myTile.recycle()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("CropError", "비트맵 크롭/회전 중 오류: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e("CropError", "비트맵 크롭/회전 중 오류: ${e.message}")
                 }
                 delay(16)
             }
