@@ -8,11 +8,21 @@
     android:background="@android:color/black"
     tools:context=".MainActivity">
 
+    <TextureView
+        android:id="@+id/hiddenTextureView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0.0"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <ImageView
         android:id="@+id/tileImageView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:scaleType="fitCenter"
+        android:scaleType="fitXY"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -23,26 +33,13 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="@android:color/white"
-
-        android:scaleType="fitXY"
-
+        android:scaleType="fitCenter"
         android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:src="@drawable/marker_0" />
-
-
-    <TextureView
-        android:id="@+id/hiddenTextureView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:alpha="0.0"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
         android:id="@+id/tvStatus"

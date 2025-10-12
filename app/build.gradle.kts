@@ -67,6 +67,7 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.0")    // Socket.IO 전용 클라이언트를 추가합니다.
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0") // (선택) 디버깅용
     implementation(project(":sdk")) // OpenCV 모듈
+    implementation ("androidx.core:core-ktx:1.12.0") // 이 버전을 사용하면 안정적입니다.
 
 
 
