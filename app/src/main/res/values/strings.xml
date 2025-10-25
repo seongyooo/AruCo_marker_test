@@ -1,3 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">test_exoplayer</string>
+    <string name="app_name">Video Wall</string>
+    <string name="connecting">연결 중…</string>
+    <string name="marker_image">ArUco Marker</string>
 </resources>
