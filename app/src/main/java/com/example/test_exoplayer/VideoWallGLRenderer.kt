@@ -1,4 +1,4 @@
-package com.example.test_exoplayer
+package com.example.test_exoplayer // ‼️ 본인의 패키지 이름으로 수정하세요
 
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext
@@ -17,32 +17,24 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
     private var textureID = 0
     private var surfaceTexture: SurfaceTexture? = null
 
-    // 레이아웃 정보 (MainActivity에서 설정)
-    var relX = 0f
-    var relY = 0f
-    var relW = 0f
-    var relH = 0f
-    var rotation = 0f // 45도 단위 각도
+    // ‼️ [삭제] 회전 및 사각형 관련 변수 모두 삭제
+    // var relX, relY, relW, relH, rotation 등...
 
     private var vertexBuffer: FloatBuffer
     private var textureBuffer: FloatBuffer
 
-    // ‼️ [추가] 셰이더 유니폼 핸들
-    private var uRotationMatrixHandle = 0
-    private var uRotationCenterHandle = 0
-
     // SurfaceTexture 준비 콜백
     var onSurfaceTextureReady: ((SurfaceTexture) -> Unit)? = null
 
-    // 정점 좌표 (전체 화면을 덮는 사각형)
+    // 정점 좌표 (전체 화면을 덮는 사각형 - 고정)
     private val vertexCoords = floatArrayOf(
-        -1.0f, -1.0f,  // 왼쪽 아래
-        1.0f, -1.0f,  // 오른쪽 아래
-        -1.0f,  1.0f,  // 왼쪽 위
-        1.0f,  1.0f   // 오른쪽 위
+        -1.0f, -1.0f,  // 왼쪽 아래 (BL)
+        1.0f, -1.0f,  // 오른쪽 아래 (BR)
+        -1.0f,  1.0f,  // 왼쪽 위 (TL)
+        1.0f,  1.0f   // 오른쪽 위 (TR)
     )
 
-    // 텍스처 좌표 (동적으로 계산됨)
+    // 텍스처 좌표 (동적으로 계산됨 - 8개 float)
     private var texCoords = FloatArray(8)
 
     init {
@@ -53,10 +45,19 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
             .put(vertexCoords)
         vertexBuffer.position(0)
 
-        // 텍스처 좌표 버퍼 초기화
+        // 텍스처 좌표 버퍼 초기화 (8개 float 공간)
         textureBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer()
+
+        // ‼️ [수정] 기본값으로 0,0,0,0... 대신 전체 텍스처를 채움
+        // (MainActivity에서 업데이트하기 전까지 검은 화면 대신 원본 영상이 보일 수 있음)
+        updateTextureCoordinates(floatArrayOf(
+            0f, 1f, // BL
+            1f, 1f, // BR
+            0f, 0f, // TL
+            1f, 0f  // TR
+        ))
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -78,7 +79,16 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
             GLES20.GL_TEXTURE_MAG_FILTER,
             GLES20.GL_LINEAR
         )
-        // ... (glTexParameteri WRAP_S, WRAP_T 생략) ...
+        GLES20.glTexParameteri(
+            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+            GLES20.GL_TEXTURE_WRAP_S,
+            GLES20.GL_CLAMP_TO_EDGE
+        )
+        GLES20.glTexParameteri(
+            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+            GLES20.GL_TEXTURE_WRAP_T,
+            GLES20.GL_CLAMP_TO_EDGE
+        )
 
         // SurfaceTexture 생성 (ExoPlayer가 여기에 비디오 출력)
         surfaceTexture = SurfaceTexture(textureID)
@@ -87,11 +97,9 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         // 셰이더 프로그램 생성
         program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER)
 
-        // ‼️ [추가] 유니폼 핸들 가져오기
-        uRotationMatrixHandle = GLES20.glGetUniformLocation(program, "uRotationMatrix")
-        uRotationCenterHandle = GLES20.glGetUniformLocation(program, "uRotationCenter")
+        // ‼️ [삭제] 회전 관련 유니폼 핸들 가져오기 (uRotationMatrixHandle 등) 삭제
 
-        Log.d("GLRenderer", "OpenGL Surface Created")
+        Log.d("GLRenderer", "OpenGL Surface Created (4-Corner Mapping)")
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -109,26 +117,9 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         // 셰이더 프로그램 사용
         GLES20.glUseProgram(program)
 
-        // 텍스처 좌표 업데이트 (크롭만 담당)
-        updateTextureCoordinates()
+        // ‼️ [삭제] updateTextureCoordinates() 호출 삭제 (MainActivity가 외부에서 호출)
 
-        // ‼️ [추가] 회전 유니폼 변수 설정
-        // 1. 회전 중심 계산 (크롭 영역의 중심)
-        val centerX = relX + relW / 2.0f
-        val centerY = relY + relH / 2.0f
-        GLES20.glUniform2f(uRotationCenterHandle, centerX, centerY)
-
-        // 2. 회전 행렬 계산
-        // 서버가 보낸 각도(CW, 시계방향)를 GL 표준(CCW, 반시계)에 맞게 변환 (-1 곱함)
-        val angleRad = Math.toRadians(-rotation.toDouble()).toFloat()
-        val cos = Math.cos(angleRad.toDouble()).toFloat()
-        val sin = Math.sin(angleRad.toDouble()).toFloat()
-
-        // 2x2 회전 행렬 [cos, sin, -sin, cos] (Column-major order)
-        val rotationMatrix = floatArrayOf(cos, sin, -sin, cos)
-
-        GLES20.glUniformMatrix2fv(uRotationMatrixHandle, 1, false, rotationMatrix, 0)
-
+        // ‼️ [삭제] 회전 유니폼 변수 설정 로직 (centerX, centerY, angleRad, Matrix 등) 모두 삭제
 
         // 정점 속성 설정
         val positionHandle = GLES20.glGetAttribLocation(program, "aPosition")
@@ -145,7 +136,7 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         GLES20.glVertexAttribPointer(
             texCoordHandle, 2,
             GLES20.GL_FLOAT, false,
-            0, textureBuffer
+            0, textureBuffer // ‼️ 이 버퍼는 updateTextureCoordinates()에 의해 업데이트됨
         )
 
         // 텍스처 유닛 설정
@@ -154,7 +145,7 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureID)
         GLES20.glUniform1i(textureHandle, 0)
 
-        // 그리기
+        // 그리기 (4개의 정점 = 1개의 사각형 스트립)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
 
         // 정리
@@ -162,37 +153,24 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         GLES20.glDisableVertexAttribArray(texCoordHandle)
     }
 
-    private fun updateTextureCoordinates() {
-        // ‼️ [수정] 90도 회전(when) 로직 완전 삭제
-
-        if (relW <= 0f || relH <= 0f) {
-            // 레이아웃 정보가 없으면 전체 화면 표시 (Y가 아래로 향하는 좌표계)
-            texCoords = floatArrayOf(
-                0f, 1f,  // 왼쪽 아래
-                1f, 1f,  // 오른쪽 아래
-                0f, 0f,  // 왼쪽 위
-                1f, 0f   // 오른쪽 위
-            )
-        } else {
-            // Y가 아래로 향하는 좌표계 (0,0 = top-left)
-            val left = relX
-            val right = relX + relW
-            val top = relY
-            val bottom = relY + relH
-
-            // 0도 기준의 기본 크롭 좌표만 설정 (셰이더가 회전시킬 것임)
-            texCoords = floatArrayOf(
-                left, bottom,  // 왼쪽 아래
-                right, bottom, // 오른쪽 아래
-                left, top,     // 왼쪽 위
-                right, top     // 오른쪽 위
-            )
+    /**
+     * ‼️ [수정] MainActivity로부터 8-float 배열(BL, BR, TL, TR 순서)을 받아
+     * 텍스처 좌표 버퍼를 업데이트합니다.
+     */
+    fun updateTextureCoordinates(newCoords: FloatArray) {
+        if (newCoords.size != 8) {
+            Log.e("GLRenderer", "잘못된 텍스처 좌표 배열 수신. 크기: ${newCoords.size}")
+            return
         }
 
-        // 텍스처 버퍼 업데이트
-        textureBuffer.clear()
-        textureBuffer.put(texCoords)
-        textureBuffer.position(0)
+        texCoords = newCoords
+        try {
+            textureBuffer.clear()
+            textureBuffer.put(texCoords)
+            textureBuffer.position(0)
+        } catch (e: Exception) {
+            Log.e("GLRenderer", "텍스처 버퍼 업데이트 중 오류", e)
+        }
     }
 
     fun release() {
@@ -203,49 +181,60 @@ class VideoWallGLRenderer : GLSurfaceView.Renderer {
         val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexSource)
         val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentSource)
 
-        var program = GLES20.glCreateProgram()
+        val program = GLES20.glCreateProgram()
+        if (program == 0) {
+            Log.e("GLRenderer", "glCreateProgram 실패")
+            return 0
+        }
         GLES20.glAttachShader(program, vertexShader)
         GLES20.glAttachShader(program, fragmentShader)
         GLES20.glLinkProgram(program)
 
-        // ... (링크 상태 확인 코드 생략) ...
-
+        val linkStatus = IntArray(1)
+        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0)
+        if (linkStatus[0] != GLES20.GL_TRUE) {
+            Log.e("GLRenderer", "프로그램 링크 실패: ")
+            Log.e("GLRenderer", GLES20.glGetProgramInfoLog(program))
+            GLES20.glDeleteProgram(program)
+            return 0
+        }
         return program
     }
 
     private fun loadShader(type: Int, shaderCode: String): Int {
         val shader = GLES20.glCreateShader(type)
+        if (shader == 0) {
+            Log.e("GLRenderer", "glCreateShader 실패 (타입: $type)")
+            return 0
+        }
         GLES20.glShaderSource(shader, shaderCode)
         GLES20.glCompileShader(shader)
 
-        // ... (컴파일 상태 확인 코드 생략) ...
-
+        val compiled = IntArray(1)
+        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0)
+        if (compiled[0] == 0) {
+            Log.e("GLRenderer", "셰이더 컴파일 실패 (타입: $type):")
+            Log.e("GLRenderer", GLES20.glGetShaderInfoLog(shader))
+            GLES20.glDeleteShader(shader)
+            return 0
+        }
         return shader
     }
 
     companion object {
-        // ‼️ [수정] 45도 회전을 위한 버텍스 셰이더
+        // ‼️ [수정] 모든 회전 로직이 제거된 가장 단순한 버텍스 셰이더
         private const val VERTEX_SHADER = """
             attribute vec4 aPosition;
             attribute vec2 aTexCoord;
             varying vec2 vTexCoord;
             
-            // [추가] 회전 유니폼 변수
-            uniform mat2 uRotationMatrix; // 2x2 회전 행렬
-            uniform vec2 uRotationCenter; // 회전 중심 (텍스처 좌표계)
-
             void main() {
                 gl_Position = aPosition;
-                
-                // [수정] 텍스처 좌표 회전
-                // 1. 텍스처 좌표를 회전 중심으로 이동
-                // 2. 회전 행렬 적용
-                // 3. 다시 원래 위치로 이동
-                vTexCoord = uRotationMatrix * (aTexCoord - uRotationCenter) + uRotationCenter;
+                vTexCoord = aTexCoord; 
             }
         """
 
-        // 프래그먼트 셰이더는 동일
+        // 프래그먼트 셰이더는 수정 없음 (동일)
         private const val FRAGMENT_SHADER = """
             #extension GL_OES_EGL_image_external : require
             precision mediump float;

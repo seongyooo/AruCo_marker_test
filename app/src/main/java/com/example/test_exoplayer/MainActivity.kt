@@ -36,11 +36,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var glRenderer: VideoWallGLRenderer
 
     private var myMarkerId = -1
-    private var myRotation = 0f
-    private var rel_x = 0f
-    private var rel_y = 0f
-    private var rel_w = 0f
-    private var rel_h = 0f
+//    private var myRotation = 0f
+//    private var rel_x = 0f
+//    private var rel_y = 0f
+//    private var rel_w = 0f
+//    private var rel_h = 0f
+
+    private var myNormalizedCorners = FloatArray(8)
 
     private var isSurfaceReady = false
     private var isLayoutReady = false
@@ -195,30 +197,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ‼️ 이 함수를 통째로 교체하세요.
     private fun setGridLayoutInfo(json: JSONObject) {
         val layoutArray = json.getJSONArray("layout")
 
         for (i in 0 until layoutArray.length()) {
             val marker = layoutArray.getJSONObject(i)
             if (marker.getInt("id") == myMarkerId) {
-                myRotation = marker.getDouble("rotation").toFloat()
 
-                val relRect = marker.getJSONObject("relative_rect")
-                rel_x = relRect.getDouble("x_percent").toFloat()
-                rel_y = relRect.getDouble("y_percent").toFloat()
-                rel_w = relRect.getDouble("w_percent").toFloat()
-                rel_h = relRect.getDouble("h_percent").toFloat()
+                // ‼️ [핵심] "relative_corners" 키가 있는지 확인
+                if (!marker.has("relative_corners")) {
+                    Log.e("LayoutInfo", "오류: 서버가 'relative_corners'를 보내지 않았습니다. (이전 버전 서버?)")
+                    return
+                }
+
+                val cornersArray = marker.getJSONArray("relative_corners")
+
+                // ArUco 코너 순서: [0: TL, 1: TR, 2: BR, 3: BL]
+                val tl = cornersArray.getJSONObject(0)
+                val tr = cornersArray.getJSONObject(1)
+                val br = cornersArray.getJSONObject(2)
+                val bl = cornersArray.getJSONObject(3)
+
+                // ‼️ GL 텍스처 좌표 순서(BL, BR, TL, TR)에 맞게 8-float 배열 생성
+                // (서버가 Y-Flipped 값을 보냈으므로 1.0f - ... 로직 제거)
+                val myNormalizedCorners = floatArrayOf(
+                    bl.getDouble("x").toFloat(), bl.getDouble("y").toFloat(), // 0: BL
+                    br.getDouble("x").toFloat(), br.getDouble("y").toFloat(), // 1: BR
+                    tl.getDouble("x").toFloat(), tl.getDouble("y").toFloat(), // 2: TL
+                    tr.getDouble("x").toFloat(), tr.getDouble("y").toFloat()  // 3: TR
+                )
 
                 // GLRenderer에 레이아웃 정보 업데이트
                 runOnUiThread {
-                    glRenderer.relX = rel_x
-                    glRenderer.relY = rel_y
-                    glRenderer.relW = rel_w
-                    glRenderer.relH = rel_h
-                    glRenderer.rotation = myRotation
+                    glRenderer.updateTextureCoordinates(myNormalizedCorners)
                 }
 
-                Log.d("LayoutInfo", "Rotation: $myRotation°, Rect: ($rel_x, $rel_y, $rel_w, $rel_h)")
+                Log.d("LayoutInfo", "4-Corner Coords [BL, BR, TL, TR] 업데이트 완료")
                 break
             }
         }
