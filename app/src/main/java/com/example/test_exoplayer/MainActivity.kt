@@ -20,6 +20,10 @@ import com.example.test_exoplayer.databinding.ActivityMainBinding
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.json.JSONObject
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -238,32 +242,55 @@ class MainActivity : AppCompatActivity() {
             Log.w("VideoSetup", "⚠️ 조건 미충족 - Surface준비:$isSurfaceReady, 레이아웃준비:$isLayoutReady, Player존재:${player != null}")
         }
     }
-
+    @OptIn(UnstableApi::class)
     private fun startPlayerWithSurface(surface: Surface) {
         Log.d("VideoSetup", "ExoPlayer 생성 시작")
-        player = ExoPlayer.Builder(this).build().apply {
-            setVideoSurface(surface)
-            setMediaItem(MediaItem.fromUri(streamUrl))
-            repeatMode = Player.REPEAT_MODE_ONE
-            playWhenReady = true
 
-            // ‼️ [개선] ExoPlayer 에러 리스너 추가
-            addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    Log.e("ExoPlayer", "플레이어 오류 발생: ${error.message}", error)
-                    runOnUiThread {
-                        // 오류 메시지를 tvStatus에 표시
-                        binding.tvStatus.text = "오류: 스트림 재생 실패\n${error.errorCodeName}"
-                        binding.tvStatus.visibility = View.VISIBLE
-                        // 비디오 화면(GL) 숨기기
-                        binding.glContainer.visibility = View.INVISIBLE
+        // 1. loadControl 정의 (이 부분은 올바르게 작성하셨습니다)
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                3000,  // MinBufferMs
+                30000, // MaxBufferMs
+                1500,  // BufferForPlaybackMs
+                1500   // BufferForPlaybackAfterRebufferMs
+            )
+            .setTargetBufferBytes(DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        // ‼️ [수정] player = ... 블록을 하나로 합쳤습니다.
+        player = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl) // ‼️ loadControl을 여기에 적용합니다.
+            .build()
+            .apply { // ‼️ .apply 블록 시작
+
+                // --- .apply 블록 안에 모든 설정을 넣습니다 ---
+
+                setVideoSurface(surface)
+                setMediaItem(MediaItem.fromUri(streamUrl))
+                repeatMode = Player.REPEAT_MODE_ONE
+                playWhenReady = true
+
+                // ‼️ 기존에 있던 에러 리스너도 여기에 포함합니다.
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        Log.e("ExoPlayer", "플레이어 오류 발생: ${error.message}", error)
+                        runOnUiThread {
+                            binding.tvStatus.text = "오류: 스트림 재생 실패\n${error.errorCodeName}"
+                            binding.tvStatus.visibility = View.VISIBLE
+                            binding.glContainer.visibility = View.INVISIBLE
+                        }
                     }
-                }
-            })
+                })
 
-            prepare()
-        }
-        Log.d("VideoSetup", "ExoPlayer 시작됨")
+                // ‼️ prepare()도 .apply 블록 안에서 호출합니다.
+                prepare()
+
+            } // ‼️ .apply 블록 닫기
+
+        // ‼️ [삭제] 중복되었던 두 번째 player = ... 블록은 여기서 삭제되었습니다.
+
+        Log.d("VideoSetup", "ExoPlayer 시작됨 (버퍼 튜닝 적용)")
     }
 
     override fun onResume() {
